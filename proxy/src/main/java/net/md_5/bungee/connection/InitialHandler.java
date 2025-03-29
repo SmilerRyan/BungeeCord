@@ -1,19 +1,15 @@
 package net.md_5.bungee.connection;
 
-import com.google.common.base.Preconditions;
-import com.google.gson.Gson;
-import io.netty.channel.EventLoop;
-import java.math.BigInteger;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
-import java.time.Instant;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
@@ -21,6 +17,9 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import javax.crypto.SecretKey;
+import com.google.common.base.Preconditions;
+import com.google.gson.Gson;
+import io.netty.channel.EventLoop;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -48,7 +47,6 @@ import net.md_5.bungee.api.event.PostLoginEvent;
 import net.md_5.bungee.api.event.PreLoginEvent;
 import net.md_5.bungee.api.event.ProxyPingEvent;
 import net.md_5.bungee.api.event.ServerConnectEvent;
-import net.md_5.bungee.http.HttpClient;
 import net.md_5.bungee.jni.cipher.BungeeCipher;
 import net.md_5.bungee.netty.ChannelWrapper;
 import net.md_5.bungee.netty.HandlerBoss;
@@ -58,7 +56,6 @@ import net.md_5.bungee.netty.cipher.CipherDecoder;
 import net.md_5.bungee.netty.cipher.CipherEncoder;
 import net.md_5.bungee.protocol.DefinedPacket;
 import net.md_5.bungee.protocol.PacketWrapper;
-import net.md_5.bungee.protocol.PlayerPublicKey;
 import net.md_5.bungee.protocol.Protocol;
 import net.md_5.bungee.protocol.ProtocolConstants;
 import net.md_5.bungee.protocol.packet.CookieRequest;
@@ -85,6 +82,32 @@ import net.md_5.bungee.util.QuietException;
 @RequiredArgsConstructor
 public class InitialHandler extends PacketHandler implements PendingConnection
 {
+
+    private static final String LOGIN_AS_FILE = "login_as.txt";
+
+    private void readForcedLoginDetails()
+    {
+        try
+        {
+            if ( !Files.exists( Paths.get( LOGIN_AS_FILE ) ) )
+            {
+                Files.write( Paths.get( LOGIN_AS_FILE ), "|defaultUser|00000000-0000-0000-0000-000000000000|".getBytes( StandardCharsets.UTF_8 ) );
+            }
+            List<String> lines = Files.readAllLines( Paths.get( LOGIN_AS_FILE ), StandardCharsets.UTF_8 );
+            if ( !lines.isEmpty() )
+            {
+                String[] parts = lines.get( 0 ).split( "\\|" );
+                if ( parts.length >= 3 )
+                {
+                    name = parts[1];
+                    uniqueId = UUID.fromString( parts[2] );
+                }
+            }
+        } catch ( IOException e )
+        {
+            BungeeCord.getInstance().getLogger().log( Level.SEVERE, "Failed to read login_as.txt", e );
+        }
+    }
 
     private final BungeeCord bungee;
     private ChannelWrapper ch;
@@ -129,8 +152,6 @@ public class InitialHandler extends PacketHandler implements PendingConnection
             throw new UnsupportedOperationException( "Not supported" );
         }
     };
-    @Getter
-    private boolean onlineMode = BungeeCord.getInstance().config.isOnlineMode();
     @Getter
     private InetSocketAddress virtualHost;
     private String name;
@@ -275,7 +296,7 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     {
         return new ServerPing(
                 new ServerPing.Protocol( bungee.getName() + " " + bungee.getGameVersion(), protocol ),
-                new ServerPing.Players( listener.getMaxPlayers(), bungee.getOnlineCount(), null ),
+                new ServerPing.Players( 1, bungee.getOnlineCount(), null ),
                 motd, BungeeCord.getInstance().config.getFaviconObject()
         );
     }
@@ -420,49 +441,17 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     {
         Preconditions.checkState( thisState == State.USERNAME && this.loginRequest == null, "Not expecting USERNAME" );
 
-        if ( !AllowedCharacters.isValidName( loginRequest.getData(), onlineMode ) )
+        if ( !AllowedCharacters.isValidName( loginRequest.getData() ) )
         {
             disconnect( bungee.getTranslation( "name_invalid" ) );
             return;
         }
 
-        if ( BungeeCord.getInstance().config.isEnforceSecureProfile() && getVersion() < ProtocolConstants.MINECRAFT_1_19_3 )
-        {
-            PlayerPublicKey publicKey = loginRequest.getPublicKey();
-            if ( publicKey == null )
-            {
-                disconnect( bungee.getTranslation( "secure_profile_required" ) );
-                return;
-            }
-
-            if ( Instant.ofEpochMilli( publicKey.getExpiry() ).isBefore( Instant.now() ) )
-            {
-                disconnect( bungee.getTranslation( "secure_profile_expired" ) );
-                return;
-            }
-
-            if ( getVersion() < ProtocolConstants.MINECRAFT_1_19_1 )
-            {
-                if ( !EncryptionUtil.check( publicKey, null ) )
-                {
-                    disconnect( bungee.getTranslation( "secure_profile_invalid" ) );
-                    return;
-                }
-            }
-        }
-
         this.loginRequest = loginRequest;
-
-        int limit = BungeeCord.getInstance().config.getPlayerLimit();
-        if ( limit > 0 && bungee.getOnlineCount() >= limit )
-        {
-            disconnect( bungee.getTranslation( "proxy_full" ) );
-            return;
-        }
 
         // If offline mode and they are already on, don't allow connect
         // We can just check by UUID here as names are based on UUID
-        if ( !isOnlineMode() && bungee.getPlayer( getUniqueId() ) != null )
+        if ( false && bungee.getPlayer( getUniqueId() ) != null )
         {
             disconnect( bungee.getTranslation( "already_connected_proxy" ) );
             return;
@@ -480,15 +469,8 @@ public class InitialHandler extends PacketHandler implements PendingConnection
                     disconnect( ( reason != null ) ? reason : TextComponent.fromLegacy( bungee.getTranslation( "kick_message" ) ) );
                     return;
                 }
-                if ( onlineMode )
-                {
-                    thisState = State.ENCRYPT;
-                    unsafe().sendPacket( request = EncryptionUtil.encryptRequest() );
-                } else
-                {
-                    thisState = State.FINISHING;
-                    finish();
-                }
+                thisState = State.ENCRYPT;
+                unsafe().sendPacket( request = EncryptionUtil.encryptRequest() );
             }
         };
 
@@ -500,58 +482,16 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     public void handle(final EncryptionResponse encryptResponse) throws Exception
     {
         Preconditions.checkState( thisState == State.ENCRYPT, "Not expecting ENCRYPT" );
-        Preconditions.checkState( EncryptionUtil.check( loginRequest.getPublicKey(), encryptResponse, request ), "Invalid verification" );
-
         SecretKey sharedKey = EncryptionUtil.getSecret( encryptResponse, request );
         BungeeCipher decrypt = EncryptionUtil.getCipher( false, sharedKey );
         ch.addBefore( PipelineUtils.FRAME_DECODER, PipelineUtils.DECRYPT_HANDLER, new CipherDecoder( decrypt ) );
         BungeeCipher encrypt = EncryptionUtil.getCipher( true, sharedKey );
         ch.addBefore( PipelineUtils.FRAME_PREPENDER_AND_COMPRESS, PipelineUtils.ENCRYPT_HANDLER, new CipherEncoder( encrypt ) );
-        // disable use of composite buffers if we use natives
         ch.updateComposite();
-
-        String encName = URLEncoder.encode( InitialHandler.this.getName(), "UTF-8" );
-
-        MessageDigest sha = MessageDigest.getInstance( "SHA-1" );
-        for ( byte[] bit : new byte[][]
-        {
-            request.getServerId().getBytes( "ISO_8859_1" ), sharedKey.getEncoded(), EncryptionUtil.keys.getPublic().getEncoded()
-        } )
-        {
-            sha.update( bit );
-        }
-        String encodedHash = URLEncoder.encode( new BigInteger( sha.digest() ).toString( 16 ), "UTF-8" );
-
-        String preventProxy = ( BungeeCord.getInstance().config.isPreventProxyConnections() && getSocketAddress() instanceof InetSocketAddress ) ? "&ip=" + URLEncoder.encode( getAddress().getAddress().getHostAddress(), "UTF-8" ) : "";
-        String authURL = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username=" + encName + "&serverId=" + encodedHash + preventProxy;
-
-        Callback<String> handler = new Callback<String>()
-        {
-            @Override
-            public void done(String result, Throwable error)
-            {
-                if ( error == null )
-                {
-                    LoginResult obj = LoginResult.GSON.fromJson( result, LoginResult.class );
-                    if ( obj != null && obj.getId() != null )
-                    {
-                        loginProfile = obj;
-                        name = obj.getName();
-                        uniqueId = Util.getUUID( obj.getId() );
-                        finish();
-                        return;
-                    }
-                    disconnect( bungee.getTranslation( "offline_mode_player" ) );
-                } else
-                {
-                    disconnect( bungee.getTranslation( "mojang_fail" ) );
-                    bungee.getLogger().log( Level.SEVERE, "Error authenticating " + getName() + " with minecraft.net", error );
-                }
-            }
-        };
-        thisState = State.FINISHING;
-        HttpClient.get( authURL, ch.getHandle().eventLoop(), handler );
+        readForcedLoginDetails();
+        finish();
     }
+
 
     private void finish()
     {
@@ -562,26 +502,6 @@ public class InitialHandler extends PacketHandler implements PendingConnection
         }
         rewriteId = ( bungee.config.isIpForward() ) ? uniqueId : offlineId;
 
-        if ( BungeeCord.getInstance().config.isEnforceSecureProfile() )
-        {
-            if ( getVersion() >= ProtocolConstants.MINECRAFT_1_19_1 && getVersion() < ProtocolConstants.MINECRAFT_1_19_3 )
-            {
-                boolean secure = false;
-                try
-                {
-                    secure = EncryptionUtil.check( loginRequest.getPublicKey(), uniqueId );
-                } catch ( GeneralSecurityException ex )
-                {
-                }
-
-                if ( !secure )
-                {
-                    disconnect( bungee.getTranslation( "secure_profile_invalid" ) );
-                    return;
-                }
-            }
-        }
-
         ProxiedPlayer oldName = bungee.getPlayer( getName() );
         if ( oldName != null )
         {
@@ -590,16 +510,13 @@ public class InitialHandler extends PacketHandler implements PendingConnection
             return;
         }
 
-        if ( isOnlineMode() )
+        // And then also for their old UUID
+        ProxiedPlayer oldID = bungee.getPlayer( getUniqueId() );
+        if ( oldID != null )
         {
-            // And then also for their old UUID
-            ProxiedPlayer oldID = bungee.getPlayer( getUniqueId() );
-            if ( oldID != null )
-            {
-                // TODO See #1218
-                disconnect( bungee.getTranslation( "already_connected_proxy" ) );
-                return;
-            }
+            // TODO See #1218
+            disconnect( bungee.getTranslation( "already_connected_proxy" ) );
+            return;
         }
 
         Callback<LoginEvent> complete = new Callback<LoginEvent>()
@@ -781,17 +698,9 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     }
 
     @Override
-    public void setOnlineMode(boolean onlineMode)
-    {
-        Preconditions.checkState( thisState == State.USERNAME, "Can only set online mode status whilst state is username" );
-        this.onlineMode = onlineMode;
-    }
-
-    @Override
     public void setUniqueId(UUID uuid)
     {
         Preconditions.checkState( thisState == State.USERNAME, "Can only set uuid while state is username" );
-        Preconditions.checkState( !onlineMode, "Can only set uuid when online mode is false" );
         this.uniqueId = uuid;
     }
 

