@@ -25,6 +25,10 @@ public class ListenerInfo
      */
     private final String motd;
     /**
+     * Max amount of slots displayed on the ping page.
+     */
+    private final int maxPlayers;
+    /**
      * Number of players to be shown on the tab list.
      */
     private final int tabListSize;
@@ -70,9 +74,9 @@ public class ListenerInfo
     private final boolean proxyProtocol;
 
     @Deprecated
-    public ListenerInfo(InetSocketAddress host, String motd, int tabListSize, List<String> serverPriority, boolean forceDefault, Map<String, String> forcedHosts, String tabListType, boolean setLocalAddress, boolean pingPassthrough, int queryPort, boolean queryEnabled)
+    public ListenerInfo(InetSocketAddress host, String motd, int maxPlayers, int tabListSize, List<String> serverPriority, boolean forceDefault, Map<String, String> forcedHosts, String tabListType, boolean setLocalAddress, boolean pingPassthrough, int queryPort, boolean queryEnabled)
     {
-        this( host, motd, tabListSize, serverPriority, forceDefault, forcedHosts, tabListType, setLocalAddress, pingPassthrough, queryPort, queryEnabled, false );
+        this( host, motd, maxPlayers, tabListSize, serverPriority, forceDefault, forcedHosts, tabListType, setLocalAddress, pingPassthrough, queryPort, queryEnabled, false );
     }
 
     /**

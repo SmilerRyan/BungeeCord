@@ -43,6 +43,13 @@ public interface ProxyConfig
     Map<String, ServerInfo> getServers();
 
     /**
+     * Does the server authenticate with Mojang.
+     *
+     * @return online mode
+     */
+    boolean isOnlineMode();
+
+    /**
      * Whether proxy commands are logged to the proxy log.
      *
      * @return log commands
@@ -56,6 +63,13 @@ public interface ProxyConfig
      * @return cache time
      */
     int getRemotePingCache();
+
+    /**
+     * Returns the player max.
+     *
+     * @return player limit
+     */
+    int getPlayerLimit();
 
     /**
      * A collection of disabled commands.

@@ -245,6 +245,7 @@ public class YamlConfig implements ConfigurationAdapter
             String motd = get( "motd", "&1Another Bungee server", val );
             motd = ChatColor.translateAlternateColorCodes( '&', motd );
 
+            int maxPlayers = get( "max_players", 1, val );
             boolean forceDefault = get( "force_default_server", false, val );
             String host = get( "host", "0.0.0.0:25577", val );
             int tabListSize = get( "tab_size", 60, val );
@@ -287,7 +288,7 @@ public class YamlConfig implements ConfigurationAdapter
             }
             set( "priorities", serverPriority, val );
 
-            ListenerInfo info = new ListenerInfo( address, motd, tabListSize, serverPriority, forceDefault, forced, value.toString(), setLocalAddress, pingPassthrough, queryPort, query, proxyProtocol );
+            ListenerInfo info = new ListenerInfo( address, motd, maxPlayers, tabListSize, serverPriority, forceDefault, forced, value.toString(), setLocalAddress, pingPassthrough, queryPort, query, proxyProtocol );
             ret.add( info );
         }
 

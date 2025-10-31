@@ -236,10 +236,10 @@ public class Login extends DefinedPacket
         }
         if ( protocolVersion >= ProtocolConstants.MINECRAFT_1_16_2 )
         {
-            writeVarInt( 1, buf );
+            writeVarInt( maxPlayers, buf );
         } else
         {
-            buf.writeByte( 1 );
+            buf.writeByte( maxPlayers );
         }
         if ( protocolVersion < ProtocolConstants.MINECRAFT_1_16 )
         {

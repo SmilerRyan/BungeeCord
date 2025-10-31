@@ -36,12 +36,12 @@
         <module name="SuppressWarningsHolder"/>
 
         <!-- See http://checkstyle.sourceforge.net/config_imports.html -->
-        <!-- <module name="ImportOrder">
+        <module name="ImportOrder">
             <property name="option" value="above"/>
             <property name="ordered" value="true"/>
             <property name="separatedStaticGroups" value="true"/>
             <property name="sortStaticImportsAlphabetically" value="true"/>
-        </module> -->
+        </module>
         <module name="RedundantImport"/>
         <module name="UnusedImports"/>
 

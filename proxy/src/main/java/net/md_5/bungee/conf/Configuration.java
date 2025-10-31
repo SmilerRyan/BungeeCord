@@ -43,6 +43,10 @@ public class Configuration implements ProxyConfig
      */
     private Map<String, ServerInfo> servers;
     /**
+     * Should we check minecraft.net auth.
+     */
+    private boolean onlineMode = true;
+    /**
      * Whether to check the authentication server public key.
      */
     private boolean enforceSecureProfile;
@@ -52,6 +56,7 @@ public class Configuration implements ProxyConfig
     private boolean logCommands;
     private boolean logPings = true;
     private int remotePingCache = -1;
+    private int playerLimit = -1;
     private Collection<String> disabledCommands;
     private int serverConnectTimeout = 5000;
     private int remotePingTimeout = 5000;
@@ -86,10 +91,12 @@ public class Configuration implements ProxyConfig
         listeners = adapter.getListeners();
         timeout = adapter.getInt( "timeout", timeout );
         uuid = adapter.getString( "stats", uuid );
+        onlineMode = adapter.getBoolean( "online_mode", onlineMode );
         enforceSecureProfile = adapter.getBoolean( "enforce_secure_profile", enforceSecureProfile );
         logCommands = adapter.getBoolean( "log_commands", logCommands );
         logPings = adapter.getBoolean( "log_pings", logPings );
         remotePingCache = adapter.getInt( "remote_ping_cache", remotePingCache );
+        playerLimit = adapter.getInt( "player_limit", playerLimit );
         serverConnectTimeout = adapter.getInt( "server_connect_timeout", serverConnectTimeout );
         remotePingTimeout = adapter.getInt( "remote_ping_timeout", remotePingTimeout );
         throttle = adapter.getInt( "connection_throttle", throttle );
