@@ -8,15 +8,14 @@ import io.netty.channel.Channel;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.UUID;
 import net.md_5.bungee.BungeeCord;
 import net.md_5.bungee.ServerConnection;
 import net.md_5.bungee.ServerConnection.KeepAliveData;
 import net.md_5.bungee.UserConnection;
 import net.md_5.bungee.Util;
 import net.md_5.bungee.api.ProxyServer;
-import net.md_5.bungee.api.connection.ProxiedPlayer;
 import net.md_5.bungee.api.event.ChatEvent;
+import net.md_5.bungee.api.event.CustomClickEvent;
 import net.md_5.bungee.api.event.PlayerDisconnectEvent;
 import net.md_5.bungee.api.event.PluginMessageEvent;
 import net.md_5.bungee.api.event.SettingsChangedEvent;
@@ -33,17 +32,16 @@ import net.md_5.bungee.protocol.packet.ClientChat;
 import net.md_5.bungee.protocol.packet.ClientCommand;
 import net.md_5.bungee.protocol.packet.ClientSettings;
 import net.md_5.bungee.protocol.packet.CookieResponse;
-import net.md_5.bungee.protocol.packet.FinishConfiguration;
+import net.md_5.bungee.protocol.packet.CustomClickAction;
 import net.md_5.bungee.protocol.packet.KeepAlive;
 import net.md_5.bungee.protocol.packet.LoginAcknowledged;
 import net.md_5.bungee.protocol.packet.LoginPayloadResponse;
-import net.md_5.bungee.protocol.packet.PlayerListItem;
-import net.md_5.bungee.protocol.packet.PlayerListItemRemove;
 import net.md_5.bungee.protocol.packet.PluginMessage;
 import net.md_5.bungee.protocol.packet.StartConfiguration;
 import net.md_5.bungee.protocol.packet.TabCompleteRequest;
 import net.md_5.bungee.protocol.packet.TabCompleteResponse;
 import net.md_5.bungee.protocol.packet.UnsignedClientCommand;
+import net.md_5.bungee.protocol.util.TagUtil;
 import net.md_5.bungee.util.AllowedCharacters;
 
 public class UpstreamBridge extends PacketHandler
@@ -77,38 +75,6 @@ public class UpstreamBridge extends PacketHandler
 
         if ( con.getServer() != null )
         {
-            // Manually remove from everyone's tab list
-            // since the packet from the server arrives
-            // too late
-            // TODO: This should only done with server_unique
-            //       tab list (which is the only one supported
-            //       currently)
-            PlayerListItem oldPacket = new PlayerListItem();
-            oldPacket.setAction( PlayerListItem.Action.REMOVE_PLAYER );
-            PlayerListItem.Item item = new PlayerListItem.Item();
-            item.setUuid( con.getRewriteId() );
-            oldPacket.setItems( new PlayerListItem.Item[]
-            {
-                item
-            } );
-
-            PlayerListItemRemove newPacket = new PlayerListItemRemove();
-            newPacket.setUuids( new UUID[]
-            {
-                con.getRewriteId()
-            } );
-
-            for ( ProxiedPlayer player : con.getServer().getInfo().getPlayers() )
-            {
-                if ( player.getPendingConnection().getVersion() >= ProtocolConstants.MINECRAFT_1_19_3 )
-                {
-                    // need to queue, because players in config state could receive it
-                    player.unsafe().sendPacketQueued( newPacket );
-                } else
-                {
-                    player.unsafe().sendPacket( oldPacket );
-                }
-            }
             con.getServer().disconnect( "Quitting" );
         }
     }
@@ -368,12 +334,6 @@ public class UpstreamBridge extends PacketHandler
     }
 
     @Override
-    public void handle(FinishConfiguration finishConfiguration) throws Exception
-    {
-        con.sendQueuedPackets();
-    }
-
-    @Override
     public void handle(CookieResponse cookieResponse) throws Exception
     {
         con.getPendingConnection().handle( cookieResponse );
@@ -383,6 +343,16 @@ public class UpstreamBridge extends PacketHandler
     public void handle(LoginPayloadResponse loginPayloadResponse) throws Exception
     {
         con.getPendingConnection().handle( loginPayloadResponse );
+    }
+
+    @Override
+    public void handle(CustomClickAction customClickAction) throws Exception
+    {
+        CustomClickEvent event = new CustomClickEvent( con, customClickAction.getId(), TagUtil.toJson( customClickAction.getData() ) );
+        if ( bungee.getPluginManager().callEvent( event ).isCancelled() )
+        {
+            throw CancelSendSignal.INSTANCE;
+        }
     }
 
     @Override

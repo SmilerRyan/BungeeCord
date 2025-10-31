@@ -54,7 +54,9 @@ import net.md_5.bungee.protocol.PacketWrapper;
 import net.md_5.bungee.protocol.Protocol;
 import net.md_5.bungee.protocol.ProtocolConstants;
 import net.md_5.bungee.protocol.packet.BossBar;
+import net.md_5.bungee.protocol.packet.BundleDelimiter;
 import net.md_5.bungee.protocol.packet.Commands;
+import net.md_5.bungee.protocol.packet.FinishConfiguration;
 import net.md_5.bungee.protocol.packet.KeepAlive;
 import net.md_5.bungee.protocol.packet.Kick;
 import net.md_5.bungee.protocol.packet.Login;
@@ -282,11 +284,11 @@ public class DownstreamBridge extends PacketHandler
                 t.setPrefix( team.getPrefix().getLeftOrCompute( (component) -> con.getChatSerializer().toString( component ) ) );
                 t.setSuffix( team.getSuffix().getLeftOrCompute( (component) -> con.getChatSerializer().toString( component ) ) );
                 t.setFriendlyFire( team.getFriendlyFire() );
-                t.setNameTagVisibility( team.getNameTagVisibility().getKey() );
+                t.setNameTagVisibility( team.getNameTagVisibility().isLeft() ? team.getNameTagVisibility().getLeft() : team.getNameTagVisibility().getRight().getKey() );
                 t.setColor( team.getColor() );
                 if ( team.getCollisionRule() != null )
                 {
-                    t.setCollisionRule( team.getCollisionRule().getKey() );
+                    t.setCollisionRule( team.getCollisionRule().isLeft() ? team.getCollisionRule().getLeft() : team.getCollisionRule().getRight().getKey() );
                 }
             }
             if ( team.getPlayers() != null )
@@ -799,6 +801,22 @@ public class DownstreamBridge extends PacketHandler
         ServerConnector.handleLogin( bungee, server.getCh(), con, server.getInfo(), null, server, login );
 
         throw CancelSendSignal.INSTANCE;
+    }
+
+    @Override
+    public void handle(FinishConfiguration finishConfiguration) throws Exception
+    {
+        // the clients protocol will change to GAME after this packet
+        con.unsafe().sendPacket( finishConfiguration );
+        // send queued packets as early as possible
+        con.sendQueuedPackets();
+        throw CancelSendSignal.INSTANCE;
+    }
+
+    @Override
+    public void handle(BundleDelimiter bundleDelimiter) throws Exception
+    {
+        con.toggleBundling();
     }
 
     @Override
